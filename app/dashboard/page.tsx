@@ -3,20 +3,15 @@
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '../../firebase';
-import { getBots, createBot } from '../../lib/db';
+import { getBots, deleteBot, Bot } from '../../lib/db';
+import { signOut } from '../../lib/utils';
 import { useRouter } from 'next/navigation';
-
-type Bot = {
-  id: string;
-  botName: string;
-  website: string;
-};
+import Link from 'next/link';
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [bots, setBots] = useState<Bot[]>([]);
-  const [botName, setBotName] = useState('');
-  const [website, setWebsite] = useState('');
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
@@ -30,64 +25,210 @@ export default function Dashboard() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [router]);
 
   const fetchBots = async (userId: string) => {
-    const userBots = await getBots(userId);
-    // Ensure each bot has id, botName, and website properties
-    setBots(
-      (userBots || []).map((bot: Partial<Bot>) => ({
-        id: bot.id ?? '',
-        botName: bot.botName || '',
-        website: bot.website || '',
-      }))
-    );
-  };
-
-  const handleCreateBot = async () => {
-    if (user) {
-      await createBot(user.uid, botName, website);
-      setBotName('');
-      setWebsite('');
-      fetchBots(user.uid);
+    setLoading(true);
+    try {
+      const userBots = await getBots(userId);
+      setBots(userBots);
+    } catch (error) {
+      console.error('Error fetching bots:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
+  const handleDeleteBot = async (botId: string) => {
+    if (confirm('Are you sure you want to delete this bot?')) {
+      try {
+        await deleteBot(botId);
+        setBots(bots.filter(bot => bot.id !== botId));
+      } catch (error) {
+        console.error('Error deleting bot:', error);
+        alert('Failed to delete bot. Please try again.');
+      }
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      router.push('/');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
+  const getEmbedCode = (botId: string) => {
+    const embedCode = `<script>
+(function() {
+  var script = document.createElement('script');
+  script.src = '${window.location.origin}/embed.js';
+  script.async = true;
+  script.setAttribute('data-bot-id', '${botId}');
+  document.head.appendChild(script);
+})();
+</script>`;
+    return embedCode;
+  };
+
+  const copyEmbedCode = (botId: string) => {
+    const code = getEmbedCode(botId);
+    navigator.clipboard.writeText(code).then(() => {
+      alert('Embed code copied to clipboard!');
+    });
+  };
+
+  if (loading) {
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+  }
+
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
-      <div className="mb-4">
-        <input
-          type="text"
-          placeholder="Bot Name"
-          value={botName}
-          onChange={(e) => setBotName(e.target.value)}
-          className="border p-2 mr-2"
-        />
-        <input
-          type="text"
-          placeholder="Website"
-          value={website}
-          onChange={(e) => setWebsite(e.target.value)}
-          className="border p-2 mr-2"
-        />
-        <button onClick={handleCreateBot} className="bg-blue-500 text-white px-4 py-2 rounded-md">
-          Create Bot
-        </button>
-      </div>
-      <div>
-        <h2 className="text-xl font-bold mb-2">Your Bots</h2>
-        <ul>
-          {bots.map((bot) => (
-            <li key={bot.id} className="border p-2 mb-2 flex justify-between items-center">
-              <div>
-                <p className="font-bold">{bot.botName}</p>
-                <p>{bot.website}</p>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Conversion Bot Dashboard</h1>
+            </div>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">Welcome, {user?.displayName || user?.email}</span>
+              <button
+                onClick={handleSignOut}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Stats Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white p-6 rounded-lg shadow">
+            <div className="text-2xl font-bold text-blue-600">{bots.length}</div>
+            <div className="text-sm text-gray-600">Total Bots</div>
+          </div>
+          <div className="bg-white p-6 rounded-lg shadow">
+            <div className="text-2xl font-bold text-green-600">{bots.filter(bot => bot.isActive).length}</div>
+            <div className="text-sm text-gray-600">Active Bots</div>
+          </div>
+          <div className="bg-white p-6 rounded-lg shadow">
+            <div className="text-2xl font-bold text-purple-600">0</div>
+            <div className="text-sm text-gray-600">Conversations Today</div>
+          </div>
+          <div className="bg-white p-6 rounded-lg shadow">
+            <div className="text-2xl font-bold text-orange-600">0%</div>
+            <div className="text-sm text-gray-600">Conversion Rate</div>
+          </div>
+        </div>
+
+        {/* Bots Section */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-semibold text-gray-900">Your Chatbots</h2>
+              <Link
+                href="/bot/create"
+                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+              >
+                + Create New Bot
+              </Link>
+            </div>
+          </div>
+
+          <div className="p-6">
+            {bots.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-gray-400 text-lg mb-4">No chatbots yet</div>
+                <p className="text-gray-600 mb-6">Create your first AI chatbot to get started</p>
+                <Link
+                  href="/bot/create"
+                  className="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  Create Your First Bot
+                </Link>
               </div>
-            </li>
-          ))}
-        </ul>
-      </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {bots.map((bot) => (
+                  <div key={bot.id} className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">{bot.botName}</h3>
+                        <p className="text-sm text-gray-600">{bot.businessName}</p>
+                      </div>
+                      <div className={`px-2 py-1 rounded-full text-xs ${
+                        bot.isActive 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {bot.isActive ? 'Active' : 'Inactive'}
+                      </div>
+                    </div>
+
+                    <div className="mb-4">
+                      <p className="text-sm text-gray-600 mb-2">
+                        <strong>Website:</strong> {bot.website}
+                      </p>
+                      <p className="text-sm text-gray-600 mb-2">
+                        <strong>Type:</strong> {bot.businessType}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <strong>Goal:</strong> {bot.conversationGoals}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex space-x-2">
+                        <Link
+                          href={`/bot/${bot.id}/chat`}
+                          className="flex-1 bg-blue-600 text-white text-center py-2 px-3 rounded text-sm hover:bg-blue-700 transition-colors"
+                        >
+                          Test Chat
+                        </Link>
+                        <Link
+                          href={`/bot/${bot.id}/edit`}
+                          className="flex-1 bg-gray-600 text-white text-center py-2 px-3 rounded text-sm hover:bg-gray-700 transition-colors"
+                        >
+                          Edit
+                        </Link>
+                      </div>
+                      
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => copyEmbedCode(bot.id)}
+                          className="flex-1 bg-green-600 text-white py-2 px-3 rounded text-sm hover:bg-green-700 transition-colors"
+                        >
+                          Copy Embed Code
+                        </button>
+                        <Link
+                          href={`/bot/${bot.id}/analytics`}
+                          className="flex-1 bg-purple-600 text-white text-center py-2 px-3 rounded text-sm hover:bg-purple-700 transition-colors"
+                        >
+                          Analytics
+                        </Link>
+                      </div>
+
+                      <button
+                        onClick={() => handleDeleteBot(bot.id)}
+                        className="w-full bg-red-600 text-white py-2 px-3 rounded text-sm hover:bg-red-700 transition-colors"
+                      >
+                        Delete Bot
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
