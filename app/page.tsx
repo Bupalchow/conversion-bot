@@ -10,13 +10,13 @@ import Link from 'next/link';
 export default function Home() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         router.push('/dashboard');
       } else {
-        setUser(null);
         setLoading(false);
       }
     });

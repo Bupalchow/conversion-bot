@@ -1,6 +1,49 @@
 import { db } from "../firebase";
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, where, getDoc, orderBy } from "firebase/firestore";
 
+// Add retry mechanism for Firebase operations
+const retryOperation = async <T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> => {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error as Error;
+      console.warn(`Operation failed (attempt ${attempt}/${maxRetries}):`, error);
+      
+      if (attempt < maxRetries) {
+        // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      }
+    }
+  }
+  
+  throw lastError;
+};
+
+// Input validation helpers
+const validateBotInput = (bot: Partial<Bot>): void => {
+  if (!bot.botName || bot.botName.trim().length === 0) {
+    throw new Error('Bot name is required');
+  }
+  if (!bot.businessName || bot.businessName.trim().length === 0) {
+    throw new Error('Business name is required');
+  }
+  if (!bot.website || !isValidUrl(bot.website)) {
+    throw new Error('Valid website URL is required');
+  }
+};
+
+const isValidUrl = (url: string): boolean => {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export type Bot = {
   id: string;
   userId: string;
@@ -63,10 +106,15 @@ export const createBot = async (
   businessInfo: Partial<Bot> = {}
 ) => {
   try {
+    // Input validation
+    if (!userId || userId.trim().length === 0) {
+      throw new Error('User ID is required');
+    }
+
     const defaultBot: Omit<Bot, 'id'> = {
       userId,
-      botName,
-      website,
+      botName: botName.trim(),
+      website: website.trim(),
       businessName: businessInfo.businessName || '',
       businessDescription: businessInfo.businessDescription || '',
       businessType: businessInfo.businessType || '',
@@ -88,11 +136,13 @@ export const createBot = async (
       lastModified: new Date(),
     };
 
-    const docRef = await addDoc(collection(db, "bots"), defaultBot);
+    validateBotInput(defaultBot);
+
+    const docRef = await retryOperation(() => addDoc(collection(db, "bots"), defaultBot));
     return docRef.id;
   } catch (error) {
     console.error("Error creating bot: ", error);
-    throw error;
+    throw new Error(error instanceof Error ? error.message : 'Failed to create bot');
   }
 };
 

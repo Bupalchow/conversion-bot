@@ -10,6 +10,7 @@ export default function CreateBot() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const router = useRouter();
 
   // Form data
@@ -33,6 +34,79 @@ export default function CreateBot() {
       borderRadius: '8px'
     }
   });
+
+  // Validation functions
+  const validateStep = (step: number): Record<string, string> => {
+    const stepErrors: Record<string, string> = {};
+
+    switch (step) {
+      case 1:
+        if (!formData.botName.trim()) {
+          stepErrors.botName = 'Bot name is required';
+        } else if (formData.botName.length < 3) {
+          stepErrors.botName = 'Bot name must be at least 3 characters';
+        }
+
+        if (!formData.website.trim()) {
+          stepErrors.website = 'Website URL is required';
+        } else if (!isValidUrl(formData.website)) {
+          stepErrors.website = 'Please enter a valid URL (including http:// or https://)';
+        }
+
+        if (!formData.businessName.trim()) {
+          stepErrors.businessName = 'Business name is required';
+        } else if (formData.businessName.length < 2) {
+          stepErrors.businessName = 'Business name must be at least 2 characters';
+        }
+        break;
+
+      case 2:
+        if (!formData.businessDescription.trim()) {
+          stepErrors.businessDescription = 'Business description is required';
+        } else if (formData.businessDescription.length < 20) {
+          stepErrors.businessDescription = 'Please provide a more detailed description (at least 20 characters)';
+        }
+
+        if (!formData.businessType) {
+          stepErrors.businessType = 'Please select a business type';
+        }
+
+        if (!formData.targetAudience.trim()) {
+          stepErrors.targetAudience = 'Target audience description is required';
+        } else if (formData.targetAudience.length < 10) {
+          stepErrors.targetAudience = 'Please provide more detail about your target audience';
+        }
+        break;
+
+      case 3:
+        if (!formData.keyProducts.trim()) {
+          stepErrors.keyProducts = 'Please describe your key products or services';
+        } else if (formData.keyProducts.length < 20) {
+          stepErrors.keyProducts = 'Please provide more detail about your products/services';
+        }
+        break;
+
+      case 4:
+        if (!formData.welcomeMessage.trim()) {
+          stepErrors.welcomeMessage = 'Welcome message is required';
+        }
+        if (!formData.fallbackMessage.trim()) {
+          stepErrors.fallbackMessage = 'Fallback message is required';
+        }
+        break;
+    }
+
+    return stepErrors;
+  };
+
+  const isValidUrl = (url: string): boolean => {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -80,7 +154,12 @@ export default function CreateBot() {
   };
 
   const nextStep = () => {
-    if (currentStep < 4) setCurrentStep(currentStep + 1);
+    const stepErrors = validateStep(currentStep);
+    setErrors(stepErrors);
+
+    if (Object.keys(stepErrors).length === 0 && currentStep < 4) {
+      setCurrentStep(currentStep + 1);
+    }
   };
 
   const prevStep = () => {
@@ -155,6 +234,7 @@ export default function CreateBot() {
                   placeholder="e.g., SalesBot Pro"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {errors.botName && <p className="text-red-500 text-sm mt-1">{errors.botName}</p>}
               </div>
 
               <div>
@@ -168,6 +248,7 @@ export default function CreateBot() {
                   placeholder="https://yourwebsite.com"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {errors.website && <p className="text-red-500 text-sm mt-1">{errors.website}</p>}
               </div>
 
               <div>
@@ -181,6 +262,7 @@ export default function CreateBot() {
                   placeholder="Your Company Name"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {errors.businessName && <p className="text-red-500 text-sm mt-1">{errors.businessName}</p>}
               </div>
             </div>
           )}
@@ -201,6 +283,7 @@ export default function CreateBot() {
                   rows={4}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {errors.businessDescription && <p className="text-red-500 text-sm mt-1">{errors.businessDescription}</p>}
               </div>
 
               <div>
@@ -224,6 +307,7 @@ export default function CreateBot() {
                   <option value="Manufacturing">Manufacturing</option>
                   <option value="Other">Other</option>
                 </select>
+                {errors.businessType && <p className="text-red-500 text-sm mt-1">{errors.businessType}</p>}
               </div>
 
               <div>
@@ -237,6 +321,7 @@ export default function CreateBot() {
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {errors.targetAudience && <p className="text-red-500 text-sm mt-1">{errors.targetAudience}</p>}
               </div>
             </div>
           )}
@@ -257,6 +342,7 @@ export default function CreateBot() {
                   rows={4}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {errors.keyProducts && <p className="text-red-500 text-sm mt-1">{errors.keyProducts}</p>}
               </div>
 
               <div>
@@ -325,6 +411,7 @@ export default function CreateBot() {
                   onChange={(e) => handleInputChange('welcomeMessage', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {errors.welcomeMessage && <p className="text-red-500 text-sm mt-1">{errors.welcomeMessage}</p>}
               </div>
 
               <div>
@@ -337,6 +424,7 @@ export default function CreateBot() {
                   onChange={(e) => handleInputChange('fallbackMessage', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {errors.fallbackMessage && <p className="text-red-500 text-sm mt-1">{errors.fallbackMessage}</p>}
               </div>
 
               <div className="grid grid-cols-2 gap-4">

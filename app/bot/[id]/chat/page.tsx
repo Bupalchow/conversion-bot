@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../../../../firebase';
 import { getBot, saveChatMessage, getChatHistory, Bot, ChatMessage } from '../../../../lib/db';
 import { generateBotResponse } from '../../../../lib/gemini';
@@ -13,7 +13,6 @@ export default function BotChat() {
   const router = useRouter();
   const botId = params.id as string;
 
-  const [user, setUser] = useState<User | null>(null);
   const [bot, setBot] = useState<Bot | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -54,7 +53,6 @@ export default function BotChat() {
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
-        setUser(currentUser);
         loadBot();
       } else {
         router.push('/');
