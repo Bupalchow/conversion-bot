@@ -12,9 +12,45 @@ export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [bots, setBots] = useState<Bot[]>([]);
   const [loading, setLoading] = useState(true);
+  const [demoMode, setDemoMode] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
+    if (!auth) {
+      // Demo mode - show demo data
+      setDemoMode(true);
+      setUser({ uid: 'demo-user', email: 'demo@example.com' } as User);
+      setBots([
+        {
+          id: 'demo-bot-1',
+          userId: 'demo-user',
+          botName: 'Demo Sales Assistant',
+          website: 'https://example.com',
+          businessName: 'Demo Business',
+          businessDescription: 'A sample business for demonstration',
+          businessType: 'E-commerce',
+          targetAudience: 'Online shoppers',
+          keyProducts: 'Digital products',
+          conversationGoals: 'Generate leads and sales',
+          brandTone: 'Friendly and professional',
+          customInstructions: 'Be helpful and guide users to purchase',
+          welcomeMessage: 'Hello! How can I help you today?',
+          fallbackMessage: 'I didn\'t understand. Can you rephrase?',
+          theme: {
+            primaryColor: '#3B82F6',
+            secondaryColor: '#1E40AF',
+            fontFamily: 'Inter',
+            borderRadius: '8px'
+          },
+          isActive: true,
+          createdAt: new Date(),
+          lastModified: new Date()
+        }
+      ]);
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setUser(user);
@@ -40,6 +76,11 @@ export default function Dashboard() {
   };
 
   const handleDeleteBot = async (botId: string) => {
+    if (demoMode) {
+      alert('This is a demo. Bot deletion is not available in demo mode.');
+      return;
+    }
+    
     if (confirm('Are you sure you want to delete this bot?')) {
       try {
         await deleteBot(botId);
@@ -52,6 +93,11 @@ export default function Dashboard() {
   };
 
   const handleSignOut = async () => {
+    if (demoMode) {
+      router.push('/');
+      return;
+    }
+    
     try {
       await signOut();
       router.push('/');
@@ -105,6 +151,27 @@ export default function Dashboard() {
           </div>
         </div>
       </header>
+
+      {/* Demo Mode Notice */}
+      {demoMode && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-yellow-700">
+                  <strong>Demo Mode:</strong> You&apos;re viewing demo data. To access full functionality with your own bots, 
+                  please configure Firebase authentication and database credentials.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

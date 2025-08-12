@@ -1,5 +1,9 @@
 import { db } from "../firebase";
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, where, getDoc, orderBy } from "firebase/firestore";
+import { demoBots, demoChatMessages, demoChatSessions, getDemoAnalytics } from "./demo-data";
+
+// Check if we're in demo mode (no Firebase connection)
+const isDemoMode = () => !db;
 
 // Add retry mechanism for Firebase operations
 const retryOperation = async <T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> => {
@@ -138,8 +142,21 @@ export const createBot = async (
 
     validateBotInput(defaultBot);
 
-    const docRef = await retryOperation(() => addDoc(collection(db, "bots"), defaultBot));
-    return docRef.id;
+    if (isDemoMode()) {
+      // Demo mode: create a bot with demo data
+      const demoBot = {
+        ...defaultBot,
+        id: `demo-${Date.now()}`,
+        userId: 'demo-user',
+        createdAt: new Date(),
+        lastModified: new Date(),
+      };
+      demoBots.push(demoBot);
+      return demoBot.id;
+    } else {
+      const docRef = await retryOperation(() => addDoc(collection(db, "bots"), defaultBot));
+      return docRef.id;
+    }
   } catch (error) {
     console.error("Error creating bot: ", error);
     throw new Error(error instanceof Error ? error.message : 'Failed to create bot');
@@ -148,6 +165,11 @@ export const createBot = async (
 
 export const getBots = async (userId: string): Promise<Bot[]> => {
   try {
+    if (isDemoMode()) {
+      // Demo mode: return demo bots
+      return demoBots as Bot[];
+    }
+
     const q = query(
       collection(db, "bots"), 
       where("userId", "==", userId),
@@ -166,6 +188,12 @@ export const getBots = async (userId: string): Promise<Bot[]> => {
 
 export const getBot = async (botId: string): Promise<Bot | null> => {
   try {
+    if (isDemoMode()) {
+      // Demo mode: return demo bot if it exists
+      const demoBot = demoBots.find(bot => bot.id === botId);
+      return demoBot ? { ...demoBot } as Bot : null;
+    }
+
     const docRef = doc(db, "bots", botId);
     const docSnap = await getDoc(docRef);
     
@@ -181,6 +209,19 @@ export const getBot = async (botId: string): Promise<Bot | null> => {
 
 export const updateBot = async (botId: string, updates: Partial<Bot>) => {
   try {
+    if (isDemoMode()) {
+      // Demo mode: update demo bot if it exists
+      const demoBotIndex = demoBots.findIndex(bot => bot.id === botId);
+      if (demoBotIndex !== -1) {
+        demoBots[demoBotIndex] = {
+          ...demoBots[demoBotIndex],
+          ...updates,
+          lastModified: new Date(),
+        };
+      }
+      return;
+    }
+
     const botRef = doc(db, "bots", botId);
     await updateDoc(botRef, {
       ...updates,
@@ -194,6 +235,15 @@ export const updateBot = async (botId: string, updates: Partial<Bot>) => {
 
 export const deleteBot = async (botId: string) => {
   try {
+    if (isDemoMode()) {
+      // Demo mode: delete demo bot by filtering out of the array
+      const demoBotIndex = demoBots.findIndex(bot => bot.id === botId);
+      if (demoBotIndex !== -1) {
+        demoBots.splice(demoBotIndex, 1);
+      }
+      return;
+    }
+
     await deleteDoc(doc(db, "bots", botId));
   } catch (error) {
     console.error("Error deleting bot: ", error);
@@ -204,11 +254,23 @@ export const deleteBot = async (botId: string) => {
 // Chat Management Functions
 export const saveChatMessage = async (message: Omit<ChatMessage, 'id'>) => {
   try {
-    const docRef = await addDoc(collection(db, "chat_messages"), {
+    const messageData = {
       ...message,
       timestamp: new Date(),
-    });
-    return docRef.id;
+    };
+
+    if (isDemoMode()) {
+      // Demo mode: save chat message to demo data
+      const demoMessage = {
+        id: `demo-msg-${Date.now()}`,
+        ...messageData,
+      };
+      demoChatMessages.push(demoMessage);
+      return demoMessage.id;
+    } else {
+      const docRef = await addDoc(collection(db, "chat_messages"), messageData);
+      return docRef.id;
+    }
   } catch (error) {
     console.error("Error saving chat message: ", error);
     throw error;
@@ -217,6 +279,11 @@ export const saveChatMessage = async (message: Omit<ChatMessage, 'id'>) => {
 
 export const getChatHistory = async (botId: string, sessionId: string): Promise<ChatMessage[]> => {
   try {
+    if (isDemoMode()) {
+      // Demo mode: return demo chat messages for the bot and session
+      return demoChatMessages.filter(msg => msg.botId === botId && msg.sessionId === sessionId) as ChatMessage[];
+    }
+
     const q = query(
       collection(db, "chat_messages"),
       where("botId", "==", botId),
@@ -236,11 +303,23 @@ export const getChatHistory = async (botId: string, sessionId: string): Promise<
 
 export const createChatSession = async (session: Omit<ChatSession, 'id'>) => {
   try {
-    const docRef = await addDoc(collection(db, "chat_sessions"), {
+    const sessionData = {
       ...session,
       startTime: new Date(),
-    });
-    return docRef.id;
+    };
+
+    if (isDemoMode()) {
+      // Demo mode: create a chat session with demo data
+      const demoSession = {
+        id: `demo-sess-${Date.now()}`,
+        ...sessionData,
+      };
+      demoChatSessions.push(demoSession);
+      return demoSession.id;
+    } else {
+      const docRef = await addDoc(collection(db, "chat_sessions"), sessionData);
+      return docRef.id;
+    }
   } catch (error) {
     console.error("Error creating chat session: ", error);
     throw error;
@@ -249,6 +328,18 @@ export const createChatSession = async (session: Omit<ChatSession, 'id'>) => {
 
 export const updateChatSession = async (sessionId: string, updates: Partial<ChatSession>) => {
   try {
+    if (isDemoMode()) {
+      // Demo mode: update demo chat session if it exists
+      const demoSessionIndex = demoChatSessions.findIndex(sess => sess.id === sessionId);
+      if (demoSessionIndex !== -1) {
+        demoChatSessions[demoSessionIndex] = {
+          ...demoChatSessions[demoSessionIndex],
+          ...updates,
+        };
+      }
+      return;
+    }
+
     const sessionRef = doc(db, "chat_sessions", sessionId);
     await updateDoc(sessionRef, updates);
   } catch (error) {
@@ -259,6 +350,11 @@ export const updateChatSession = async (sessionId: string, updates: Partial<Chat
 
 export const getBotAnalytics = async (botId: string, days: number = 30) => {
   try {
+    if (isDemoMode()) {
+      // Demo mode: return demo analytics
+      return getDemoAnalytics(botId, days);
+    }
+
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
